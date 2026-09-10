@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>无障碍影视解说编排</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- 顶栏 -->
+  <header class="topbar">
+    <div class="brand">🎬 解说编排台</div>
+    <div class="proj-switch">
+      <select id="projectSelect" title="切换项目"></select>
+      <button class="btn sm" id="newProjectBtn" title="新建项目">＋ 新建</button>
+      <button class="btn sm" id="renameProjectBtn">重命名</button>
+      <button class="btn sm danger" id="deleteProjectBtn">删除</button>
+    </div>
+    <div class="top-actions">
+      <button class="btn" id="importBtn">导入 SRT</button>
+      <button class="btn" id="sampleBtn">载入示例</button>
+      <button class="btn" id="undoBtn" disabled>↶ 撤销</button>
+      <button class="btn" id="versionsBtn" disabled>📚 版本</button>
+      <div class="export-group">
+        <button class="btn primary" id="exportNarrBtn" disabled>导出解说 SRT</button>
+        <button class="btn primary" id="exportMergedBtn" disabled>导出合并 SRT</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 欢迎屏 -->
+  <div id="welcome" class="welcome">
+    <div class="welcome-card">
+      <h1>无障碍影视解说编排</h1>
+      <p>导入 SRT 字幕，自动发现静默窗口，拖拽编排中英文解说卡片。<br>
+         冲突检测、语速估算、倍速预演、版本管理 —— 全部在本机完成。</p>
+      <div class="welcome-actions">
+        <button class="btn primary big" id="welcomeNew">＋ 新建项目</button>
+        <button class="btn big" id="welcomeSample">载入示例字幕体验</button>
+      </div>
+    </div>
+  </div>
+
+  <main id="workspace" class="workspace hidden">
+    <!-- 控制条 -->
+    <section class="controlbar">
+      <div class="ctl-group playback">
+        <button class="btn play" id="playBtn" title="播放/暂停 (空格)">▶</button>
+        <span class="time-readout" id="timeReadout">00:00.0 / 00:00.0</span>
+        <button class="btn sm" id="toStartBtn" title="回到开头">⏮</button>
+      </div>
+      <div class="ctl-group">
+        <label>倍速
+          <select id="rateSelect">
+            <option value="0.5">0.5×</option>
+            <option value="0.75">0.75×</option>
+            <option value="1" selected>1×</option>
+            <option value="1.25">1.25×</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+        <label>缩放
+          <select id="zoomSelect">
+            <option value="20">20 px/s</option>
+            <option value="40" selected>40 px/s</option>
+            <option value="80">80 px/s</option>
+            <option value="120">120 px/s</option>
+            <option value="200">200 px/s</option>
+          </select>
+        </label>
+      </div>
+      <div class="ctl-group settings">
+        <label>最小静默间隔
+          <input type="number" id="minGapInput" min="0" step="0.1" value="1.0"> 秒
+        </label>
+        <label>语速
+          <input type="number" id="speechRateInput" min="10" step="10" value="240">
+          <span class="hint">单位/分钟（汉字或英文词）</span>
+        </label>
+      </div>
+      <div class="ctl-group stats" id="globalStats"></div>
+    </section>
+
+    <!-- 时间轴 -->
+    <section class="timeline-wrap" id="timelineWrap">
+      <div class="ruler" id="ruler"></div>
+      <div class="tracks" id="tracks">
+        <div class="track-row" style="height:64px">
+          <div class="track-label">对白</div>
+          <div class="track" id="subTrack"></div>
+        </div>
+        <div class="track-row" style="height:40px">
+          <div class="track-label">空档</div>
+          <div class="track gaps" id="gapTrack"></div>
+        </div>
+        <div class="track-row" style="height:84px">
+          <div class="track-label">解说</div>
+          <div class="track cards" id="cardTrack"></div>
+        </div>
+        <div class="playhead" id="playhead"></div>
+      </div>
+      <div class="timeline-empty" id="timelineEmpty">
+        尚未导入字幕。点击右上角「导入 SRT」或「载入示例」开始。
+      </div>
+    </section>
+
+    <!-- 下方：卡片列表 + 编辑面板 -->
+    <section class="bottom-panel">
+      <div class="card-list-panel">
+        <div class="panel-head">
+          <h2>解说卡片（按时间）</h2>
+          <button class="btn sm" id="addCardBtn">＋ 手动新增</button>
+        </div>
+        <ul class="card-list" id="cardList"></ul>
+      </div>
+      <div class="editor-panel" id="editorPanel">
+        <div class="editor-empty" id="editorEmpty">← 点击时间轴空档插入解说，或从列表中选择卡片编辑</div>
+        <div class="editor-body hidden" id="editorBody">
+          <div class="editor-head">
+            <h2 id="editorTitle">解说卡片</h2>
+            <div class="editor-head-btns">
+              <button class="btn sm" id="lockBtn">🔓 未锁定</button>
+              <button class="btn sm danger" id="deleteCardBtn">删除</button>
+            </div>
+          </div>
+          <textarea id="cardText" rows="5" placeholder="输入解说文本，支持中英文混排…"></textarea>
+          <div class="estimate-row">
+            <span id="estimateInfo"></span>
+            <button class="btn sm" id="autoFitBtn" title="按预估朗读时长设置区间">⏱ 贴合语速</button>
+          </div>
+          <div class="time-row">
+            <label>开始 <input type="text" id="startInput" class="time-input"></label>
+            <label>结束 <input type="text" id="endInput" class="time-input"></label>
+            <label>时长 <input type="text" id="durInput" class="time-input"></label>
+          </div>
+          <div class="mode-row">
+            <label><input type="radio" name="durMode" value="auto"> 时长跟随语速自动估算</label>
+            <label><input type="radio" name="durMode" value="manual"> 手动指定时长</label>
+          </div>
+          <div class="conflict-box" id="conflictBox"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- 导入对话框 -->
+<div class="modal-mask hidden" id="importMask">
+  <div class="modal">
+    <h2>导入 SRT 字幕</h2>
+    <p class="modal-hint">选择本地 .srt 文件，或直接粘贴字幕内容。</p>
+    <input type="file" id="srtFile" accept=".srt,.txt">
+    <textarea id="srtPaste" rows="8" placeholder="1&#10;00:00:01,000 --> 00:00:03,000&#10;对白内容…"></textarea>
+    <label class="check-line"><input type="checkbox" id="appendMode"> 追加到现有字幕（默认替换，并清空解说）</label>
+    <div class="modal-actions">
+      <span class="modal-error" id="importError"></span>
+      <button class="btn" data-close>取消</button>
+      <button class="btn primary" id="doImportBtn">导入</button>
+    </div>
+  </div>
+</div>
+
+<!-- 版本对话框 -->
+<div class="modal-mask hidden" id="versionsMask">
+  <div class="modal wide">
+    <h2>工作版本</h2>
+    <p class="modal-hint">版本保存当前字幕、解说与设置的完整快照，可随时恢复。</p>
+    <div class="save-version-row">
+      <input type="text" id="versionName" placeholder="版本名称，如：初审版">
+      <button class="btn primary" id="saveVersionBtn">保存当前为版本</button>
+    </div>
+    <ul class="version-list" id="versionList"></ul>
+    <div class="modal-actions">
+      <button class="btn" data-close>关闭</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
